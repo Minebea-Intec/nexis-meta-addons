@@ -1,0 +1,273 @@
+From 3aa6a575d65b7f15f813698df9b9b635beba7211 Mon Sep 17 00:00:00 2001
+From: Helmut Zollner <helmut@tux014.sartorius.com>
+Date: Mon, 9 Apr 2018 15:49:54 +0200
+Subject: [PATCH] replace D_DEBUG_AT by D_INFO
+
+---
+ inputdrivers/linux_input/linux_input.c | 60 +++++++++++++++++-----------------
+ 1 file changed, 30 insertions(+), 30 deletions(-)
+
+diff --git a/inputdrivers/linux_input/linux_input.c b/inputdrivers/linux_input/linux_input.c
+index 7e9a6ad..94322ae 100644
+--- a/inputdrivers/linux_input/linux_input.c
++++ b/inputdrivers/linux_input/linux_input.c
+@@ -839,7 +839,7 @@ linux_input_EventThread( DirectThread *thread, void *driver_data )
+      fd_set             set;
+      struct touchpad_fsm_state fsm_state;
+ 
+-     D_DEBUG_AT( Debug_LinuxInput, "%s()\n", __FUNCTION__ );
++     D_INFO(  "%s()\n", __FUNCTION__ );
+ 
+      fdmax = MAX( data->fd, data->quitpipe[0] );
+ 
+@@ -1050,12 +1050,12 @@ get_device_info( int              fd,
+ 
+      struct input_id devinfo;
+ 
+-     D_DEBUG_AT( Debug_LinuxInput, "%s()\n", __FUNCTION__ );
++     D_INFO(  "%s()\n", __FUNCTION__ );
+ 
+      /* get device name */
+      ioctl( fd, EVIOCGNAME(DFB_INPUT_DEVICE_DESC_NAME_LENGTH - 1), info->desc.name );
+ 
+-     D_DEBUG_AT( Debug_LinuxInput, "  -> name '%s'\n", info->desc.name );
++     D_INFO(  "  -> name '%s'\n", info->desc.name );
+ 
+      /* set device vendor */
+      snprintf( info->desc.vendor,
+@@ -1194,7 +1194,7 @@ get_device_info( int              fd,
+      info->desc.vendor_id  = devinfo.vendor;
+      info->desc.product_id = devinfo.product;
+ 
+-     D_DEBUG_AT( Debug_LinuxInput, "  -> ids %d/%d\n", info->desc.vendor_id, info->desc.product_id );
++     D_INFO(  "  -> ids %d/%d\n", info->desc.vendor_id, info->desc.product_id );
+ }
+ 
+ static bool
+@@ -1202,12 +1202,12 @@ check_device( const char *device )
+ {
+      int  fd;
+ 
+-     D_DEBUG_AT( Debug_LinuxInput, "%s( '%s' )\n", __FUNCTION__, device );
++     D_INFO(  "%s( '%s' )\n", __FUNCTION__, device );
+ 
+      /* Check if we are able to open the device */
+      fd = open( device, O_RDWR );
+      if (fd < 0) {
+-          D_DEBUG_AT( Debug_LinuxInput, "  -> open failed!\n" );
++          D_INFO(  "  -> open failed!\n" );
+           return false;
+      }
+      else {
+@@ -1232,7 +1232,7 @@ check_device( const char *device )
+           close( fd );
+ 
+           if (!info.desc.caps) {
+-              D_DEBUG_AT( Debug_LinuxInput, "  -> no caps!\n" );
++              D_INFO(  "  -> no caps!\n" );
+               return false;
+           }
+ 
+@@ -1241,7 +1241,7 @@ check_device( const char *device )
+                return true;
+      }
+ 
+-     D_DEBUG_AT( Debug_LinuxInput, "  -> returning false!\n" );
++     D_INFO(  "  -> returning false!\n" );
+ 
+      return false;
+ }
+@@ -1381,7 +1381,7 @@ driver_resume( void )
+ static DFBResult
+ register_device_node( int event_num, int *index)
+ {
+-     D_DEBUG_AT( Debug_LinuxInput, "%s()\n", __FUNCTION__ );
++     D_INFO(  "%s()\n", __FUNCTION__ );
+ 
+      D_ASSERT( index != NULL );
+ 
+@@ -1403,7 +1403,7 @@ register_device_node( int event_num, int *index)
+      }
+ 
+      /* Too many input devices plugged in to be handled by linux_input driver. */
+-     D_DEBUG_AT( Debug_LinuxInput,
++     D_INFO( 
+                  "The amount of devices registered exceeds the limit (%u) "
+                  "supported by linux input provider.\n",
+                  MAX_LINUX_INPUT_DEVICES );
+@@ -1417,7 +1417,7 @@ register_device_node( int event_num, int *index)
+ static DFBResult
+ unregister_device_node( int event_num, int *index)
+ {
+-     D_DEBUG_AT( Debug_LinuxInput, "%s()\n", __FUNCTION__ );
++     D_INFO(  "%s()\n", __FUNCTION__ );
+ 
+      D_ASSERT( index != NULL );
+ 
+@@ -1446,7 +1446,7 @@ unregister_device_node( int event_num, int *index)
+ static DFBResult
+ is_created( int index, void *data)
+ {
+-     D_DEBUG_AT( Debug_LinuxInput, "%s()\n", __FUNCTION__ );
++     D_INFO(  "%s()\n", __FUNCTION__ );
+ 
+      D_ASSERT( data != NULL );
+ 
+@@ -1471,7 +1471,7 @@ is_created( int index, void *data)
+ static InputDriverCapability
+ get_capability( void )
+ {
+-     D_DEBUG_AT( Debug_LinuxInput, "%s()\n", __FUNCTION__ );
++     D_INFO(  "%s()\n", __FUNCTION__ );
+ 
+      InputDriverCapability   capabilities = IDC_NONE;
+ 
+@@ -1486,12 +1486,12 @@ get_capability( void )
+           // the Virtual Terminal file ("/dev/tty0") open and available for use.
+           // FIXME:  Additional logic needed for system drivers not similar to fbdev?
+           if (!dfb_fbdev->vt || dfb_fbdev->vt->fd < 0) {
+-               D_DEBUG_AT( Debug_LinuxInput, "  -> no VT\n" );
++               D_INFO(  "  -> no VT\n" );
+                goto exit;
+           }
+      }
+ 
+-     D_DEBUG_AT( Debug_LinuxInput, "  -> returning HOTPLUG\n" );
++     D_INFO(  "  -> returning HOTPLUG\n" );
+ 
+      capabilities |= IDC_HOTPLUG;
+ 
+@@ -1506,7 +1506,7 @@ exit:
+ static void *
+ udev_hotplug_EventThread(DirectThread *thread, void * hotplug_data)
+ {
+-     D_DEBUG_AT( Debug_LinuxInput, "%s()\n", __FUNCTION__ );
++     D_INFO(  "%s()\n", __FUNCTION__ );
+ 
+      CoreDFB           *core;
+      void              *driver;
+@@ -1577,7 +1577,7 @@ udev_hotplug_EventThread(DirectThread *thread, void * hotplug_data)
+           if (FD_ISSET(socket_fd, &rset)) {
+                recv_len = recv(socket_fd, udev_event, sizeof(udev_event), 0);
+                if (recv_len <= 0) {
+-                    D_DEBUG_AT( Debug_LinuxInput,
++                    D_INFO( 
+                                 "error receiving uevent message: %s\n",
+                                 strerror(errno) );
+                     continue;
+@@ -1608,14 +1608,14 @@ udev_hotplug_EventThread(DirectThread *thread, void * hotplug_data)
+           if (driver_suspended)
+           {
+                /* Release the lock and quit handling hotplug events. */
+-               D_DEBUG_AT( Debug_LinuxInput, "Driver is suspended\n" );
++               D_INFO(  "Driver is suspended\n" );
+                pthread_mutex_unlock(&driver_suspended_lock);
+                continue;
+           }
+ 
+           /* Handle hotplug events since the driver is not suspended. */
+           if (!strcmp(udev_event, "add")) {
+-               D_DEBUG_AT( Debug_LinuxInput,
++               D_INFO( 
+                            "Device node /dev/input/event%d is created by udev\n",
+                            device_num);
+ 
+@@ -1628,7 +1628,7 @@ udev_hotplug_EventThread(DirectThread *thread, void * hotplug_data)
+                      * provider, inform the user.
+                      */
+                     if ( DFB_OK != ret) {
+-                         D_DEBUG_AT( Debug_LinuxInput,
++                         D_INFO(
+                                      "Linux/Input: Failed to create the "
+                                      "device for /dev/input/event%d\n",
+                                      device_num );
+@@ -1636,7 +1636,7 @@ udev_hotplug_EventThread(DirectThread *thread, void * hotplug_data)
+                }
+           }
+           else if (!strcmp(udev_event, "remove")) {
+-               D_DEBUG_AT( Debug_LinuxInput,
++               D_INFO( 
+                            "Device node /dev/input/event%d is removed by udev\n",
+                            device_num );
+                ret = unregister_device_node( device_num, &index );
+@@ -1649,7 +1649,7 @@ udev_hotplug_EventThread(DirectThread *thread, void * hotplug_data)
+                      * provider, just print the info.
+                      */
+                     if ( DFB_OK != ret) {
+-                         D_DEBUG_AT( Debug_LinuxInput,
++                         D_INFO( 
+                                      "Linux/Input: Failed to remove the "
+                                      "device for /dev/input/event%d\n",
+                                      device_num );
+@@ -1661,7 +1661,7 @@ udev_hotplug_EventThread(DirectThread *thread, void * hotplug_data)
+           pthread_mutex_unlock(&driver_suspended_lock);
+      }
+ 
+-     D_DEBUG_AT( Debug_LinuxInput,
++     D_INFO( 
+                  "Finished hotplug detection thread within Linux Input "
+                  "provider.\n" );
+      return NULL;
+@@ -1685,7 +1685,7 @@ stop_hotplug( void )
+ {
+      int res;
+ 
+-     D_DEBUG_AT( Debug_LinuxInput, "%s()\n", __FUNCTION__ );
++     D_INFO(  "%s()\n", __FUNCTION__ );
+ 
+      /* Exit immediately if the hotplug thread is not created successfully in
+       * launch_hotplug().
+@@ -1722,7 +1722,7 @@ stop_hotplug( void )
+      }
+ 
+ exit:
+-     D_DEBUG_AT( Debug_LinuxInput, "%s() closed\n", __FUNCTION__ );
++     D_INFO(  "%s() closed\n", __FUNCTION__ );
+      return DFB_OK;
+ }
+ 
+@@ -1735,7 +1735,7 @@ launch_hotplug(CoreDFB         *core,
+ {
+      int ret;
+ 
+-     D_DEBUG_AT( Debug_LinuxInput, "%s()\n", __FUNCTION__ );
++     D_INFO(  "%s()\n", __FUNCTION__ );
+ 
+      HotplugThreadData  *data;
+      DFBResult           result;
+@@ -1809,12 +1809,12 @@ driver_open_device( CoreInputDevice  *device,
+      unsigned long    ledbit[NBITS(LED_CNT)];
+      LinuxInputData  *data;
+ 
+-     D_DEBUG_AT( Debug_LinuxInput, "%s()\n", __FUNCTION__ );
++     D_INFO(  "%s()\n", __FUNCTION__ );
+ 
+      /* open device */
+      fd = open( device_names[number], O_RDWR );
+      if (fd < 0) {
+-          D_DEBUG_AT( Debug_LinuxInput,
++          D_INFO( 
+                       "DirectFB/linux_input: could not open device %s\n",
+                       device_names[number] );
+           return DFB_INIT;
+@@ -2039,7 +2039,7 @@ driver_close_device( void *driver_data )
+      int res;
+      LinuxInputData *data = (LinuxInputData*) driver_data;
+ 
+-     D_DEBUG_AT( Debug_LinuxInput, "%s()\n", __FUNCTION__ );
++     D_INFO(  "%s()\n", __FUNCTION__ );
+ 
+      /* stop input thread */
+      res = write( data->quitpipe[1], " ", 1 );
+@@ -2069,7 +2069,7 @@ driver_close_device( void *driver_data )
+      /* free private data */
+      D_FREE( data );
+ 
+-     D_DEBUG_AT( Debug_LinuxInput, "%s() closed\n", __FUNCTION__ );
++     D_INFO(  "%s() closed\n", __FUNCTION__ );
+ }
+ 
+ static bool
+-- 
+2.14.1
+

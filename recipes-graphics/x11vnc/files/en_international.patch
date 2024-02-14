@@ -1,0 +1,184 @@
+From: Tobias Platen <tobias.platen@minebea-intec.com>
+Date: Wed, 6 Apr 2022 14:46:25 +0200
+Subject: [PATCH] implement umlaut config
+
+---
+ x11vnc/uinput.c | 148 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 148 insertions(+)
+
+diff --git a/x11vnc/uinput.c b/x11vnc/uinput.c
+index 015627e..9758bdd 100644
+--- a/x11vnc/uinput.c
++++ b/x11vnc/uinput.c
+@@ -1219,6 +1219,90 @@ void uinput_pointer_command(int mask, int x, int y, rfbClientPtr client) {
+ 	bmask = mask;
+ }
+ 
++static int umlaut(int code)
++{
++	switch(code)
++	{
++		//first row
++		case 0xe4:
++		case 0xc4:
++			return KEY_Q; //"adiaeresis"
++		
++		case 0xe5: 
++		case 0xc5:
++			return KEY_W; //"aring"
++		
++		case 0xe9: 
++		case 0xc9: 
++			return KEY_E; //"eacute"
++			
++		case 0xeb:
++		case 0xcb: 
++			return KEY_R; //"ediaeresis"
++		
++		case 0xfe: 
++		case 0xde:
++			return KEY_T; //"thorn"
++			
++		case 0xfc:
++		case 0xdc:
++			return KEY_Y; //udiaeresis"
++			
++		case 0xfa:
++		case 0xda: 
++			return KEY_U; //"uacute"
++		
++		case 0xed: 
++		case 0xcd:
++			return KEY_I; //"iacute"
++			
++		case 0xf3: 
++		case 0xd3:
++			return KEY_O; //"oacute"
++			
++		case 0xf6: 
++		case 0xd6:
++			return KEY_P; //"odiaeresis" -- broken 
++		
++		//second row
++		case 0xe1:
++		case 0xc1:
++			return KEY_A; //"aacute"
++			
++		case 0xdf: //"ssharp"
++		case 0xa7: //"section"
++			return KEY_S; 
++		
++		case 0xf0: 
++		case 0xd0:
++			return KEY_D; //"eth" 
++			
++		case 0xf8: 
++		case 0xd8:
++			return KEY_L; //"oslash"
++			
++		//third row
++		case 0xe6: 
++		case 0xc6:
++			return KEY_Z; //"ae"
++			
++		case 0xa2: // "cent": 
++		case 0xa9: // "copyright"
++			return KEY_C;
++			
++		case 0xae: // "registered"
++			return KEY_V;
++		
++		case 0xf1: 
++		case 0xd1:
++			return KEY_N; //"ntilde"
++			
++		case 0xb5: 
++			return KEY_M; //"mu"
++	}
++	return -1;
++}
++
+ void uinput_key_command(int down, int keysym, rfbClientPtr client) {
+ #ifdef UINPUT_OK
+ 	struct input_event ev;
+@@ -1236,6 +1320,68 @@ void uinput_key_command(int down, int keysym, rfbClientPtr client) {
+ 	if (! input.keystroke) {
+ 		return;
+ 	}
++	
++	int u = umlaut(keysym);
++	
++	if(u>0)
++	{
++		
++		if(down)
++		{
++			//key_pressed[KEY_RIGHTALT] = 1;
++			memset(&ev, 0, sizeof(ev));
++			gettimeofday(&ev.time, NULL);
++			ev.type = EV_KEY;
++			ev.code = (unsigned char) KEY_RIGHTMETA;
++			ev.value = 1;
++			write(d, &ev, sizeof(ev));
++			
++			usleep(10000);
++			
++			//key_pressed[u] = 1;
++			memset(&ev, 0, sizeof(ev));
++			gettimeofday(&ev.time, NULL);
++			ev.type = EV_KEY;
++			ev.code = (unsigned char) u;
++			ev.value = 1;
++			write(d, &ev, sizeof(ev));
++			
++			ev.type = EV_SYN;
++			ev.code = SYN_REPORT;
++			ev.value = 0;
++			write(d, &ev, sizeof(ev));
++		}
++		else
++		{
++			
++			//key_pressed[KEY_RIGHTALT] = 0;
++			memset(&ev, 0, sizeof(ev));
++			gettimeofday(&ev.time, NULL);
++			ev.type = EV_KEY;
++			ev.code = (unsigned char) u;
++			ev.value = 0;
++			write(d, &ev, sizeof(ev));
++			
++			
++			usleep(10000);
++			
++			//key_pressed[u] = 0;
++			memset(&ev, 0, sizeof(ev));
++			gettimeofday(&ev.time, NULL);
++			ev.type = EV_KEY;
++			ev.code = (unsigned char) KEY_RIGHTMETA;
++			ev.value = 0;
++			write(d, &ev, sizeof(ev));
++			
++			ev.type = EV_SYN;
++			ev.code = SYN_REPORT;
++			ev.value = 0;
++			write(d, &ev, sizeof(ev));
++			
++		}
++		
++		return;
++	}
+ 
+ 	scancode = lookup_code(keysym);
+ 
+@@ -1269,6 +1415,8 @@ void uinput_key_command(int down, int keysym, rfbClientPtr client) {
+   grep 'case XK_' x0vnc.c | sed -e 's/case /$key_lookup{/' -e 's/:/}/' -e 's/return /= $/'
+ #endif
+ 
++
++
+ static int lookup_code(int keysym) {
+ 
+ 	if (keysym == NoSymbol) {
+--
+libgit2 0.26.0
+

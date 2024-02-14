@@ -1,0 +1,15 @@
+Index: nexis-yocto/workspace/tmp/work/cortexa7t2hf-neon-dey-linux-gnueabi/qpdf/9.0.2-r0/qpdf-release-qpdf-9.0.2/make/libtool.mk
+===================================================================
+--- qpdf-release-qpdf-9.0.2/make/libtool.mk
++++ qpdf-release-qpdf-9.0.2/make/libtool.mk
+@@ -127,10 +127,4 @@ install: all
+ 	./install-sh -m 0644 include/qpdf/*.hh $(DESTDIR)$(includedir)/qpdf
+ 	./install-sh -m 0644 doc/stylesheet.css $(DESTDIR)$(docdir)
+ 	./install-sh -m 0644 libqpdf.pc $(DESTDIR)$(libdir)/pkgconfig
+-	if [ -f doc/qpdf-manual.html ]; then \
+-		./install-sh -m 0644 doc/qpdf-manual.html $(DESTDIR)$(docdir); \
+-	fi
+-	if [ -f doc/qpdf-manual.pdf ]; then \
+-		./install-sh -m 0644 doc/qpdf-manual.pdf $(DESTDIR)$(docdir); \
+-	fi
+ 	./install-sh -m 0644 doc/*.1 $(DESTDIR)$(mandir)/man1

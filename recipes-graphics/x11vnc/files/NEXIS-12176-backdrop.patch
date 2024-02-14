@@ -1,0 +1,838 @@
+diff --git a/libvncserver/rfbserver.c b/libvncserver/rfbserver.c
+index 4cc7c46..a8a0069 100644
+--- a/libvncserver/rfbserver.c
++++ b/libvncserver/rfbserver.c
+@@ -2473,9 +2473,14 @@ static void* shm_get_ptr()
+ 
+ static void* shm_ptr = 0;
+ 
++/* screen overlay (red M) REDUNDANT */
++extern int screen_overlay_x_offset;
++extern int screen_overlay_y_offset;
+ 
++//FIXME: this can be optimized for performance
+ void screen_overlay(rfbScreenInfoPtr screen)
+ {
++		#if 1
+ 		if(shm_ptr==0) shm_ptr=shm_get_ptr();
+ 		
+ 		if(shm_ptr==0xFFFFFFFF) return;
+@@ -2490,13 +2495,14 @@ void screen_overlay(rfbScreenInfoPtr screen)
+ 		{
+ 			return;
+ 		}
++		#endif
+ 		
+ 		char* fb = screen->frameBuffer;
+ 		int width = screen->width;
+ 		int height = screen->height;
+ 		
+-		int x_start = 437;
+-		int y_start = 5;
++		int x_start = screen_overlay_x_offset;
++		int y_start = screen_overlay_y_offset;
+ 		
+ 		for(int x=0;x<width;x++)
+ 		{
+diff --git a/x11vnc/Makefile.am b/x11vnc/Makefile.am
+index b008f50..1e62f50 100644
+--- a/x11vnc/Makefile.am
++++ b/x11vnc/Makefile.am
+@@ -1,7 +1,7 @@
+ if HAVE_SYSTEM_LIBVNCSERVER
+-LDADD = @SYSTEM_LIBVNCSERVER_LIBS@ @WSOCKLIB@
++LDADD = @SYSTEM_LIBVNCSERVER_LIBS@ @WSOCKLIB@ -lconfig
+ else
+-LDADD = ../libvncserver/libvncserver.a ../libvncclient/libvncclient.a @WSOCKLIB@
++LDADD = ../libvncserver/libvncserver.a ../libvncclient/libvncclient.a @WSOCKLIB@ -lconfig
+ endif
+ 
+ if OSX
+diff --git a/x11vnc/Makefile.in b/x11vnc/Makefile.in
+index 162d2e0..5f38488 100644
+--- a/x11vnc/Makefile.in
++++ b/x11vnc/Makefile.in
+@@ -242,8 +242,8 @@ sharedstatedir = @sharedstatedir@
+ sysconfdir = @sysconfdir@
+ target_alias = @target_alias@
+ with_ffmpeg = @with_ffmpeg@
+-@HAVE_SYSTEM_LIBVNCSERVER_FALSE@LDADD = ../libvncserver/libvncserver.a ../libvncclient/libvncclient.a @WSOCKLIB@
+-@HAVE_SYSTEM_LIBVNCSERVER_TRUE@LDADD = @SYSTEM_LIBVNCSERVER_LIBS@ @WSOCKLIB@
++@HAVE_SYSTEM_LIBVNCSERVER_FALSE@LDADD = ../libvncserver/libvncserver.a ../libvncclient/libvncclient.a @WSOCKLIB@ -lconfig
++@HAVE_SYSTEM_LIBVNCSERVER_TRUE@LDADD = @SYSTEM_LIBVNCSERVER_LIBS@ @WSOCKLIB@ -lconfig
+ @OSX_TRUE@FRAMEWORKS = -framework ApplicationServices -framework \
+ @OSX_TRUE@	Carbon -framework IOKit -framework Cocoa \
+ @OSX_TRUE@	$(am__append_1) $(am__append_2)
+diff --git a/x11vnc/loadbmp.h b/x11vnc/loadbmp.h
+new file mode 100644
+index 0000000..ca3d57b
+--- /dev/null
++++ b/x11vnc/loadbmp.h
+@@ -0,0 +1,278 @@
++
++// Author: Christian Vallentin <vallentin.source@gmail.com>
++// Website: http://vallentin.dev
++// Repository: https://github.com/vallentin/LoadBMP
++//
++// Date Created: January 03, 2014
++// Last Modified: August 13, 2016
++//
++// Version: 1.1.0
++
++// Copyright (c) 2014-2016 Christian Vallentin <vallentin.source@gmail.com>
++//
++// This software is provided 'as-is', without any express or implied
++// warranty. In no event will the authors be held liable for any damages
++// arising from the use of this software.
++//
++// Permission is granted to anyone to use this software for any purpose,
++// including commercial applications, and to alter it and redistribute it
++// freely, subject to the following restrictions:
++//
++// 1. The origin of this software must not be misrepresented; you must not
++//    claim that you wrote the original software. If you use this software
++//    in a product, an acknowledgment in the product documentation would be
++//    appreciated but is not required.
++//
++// 2. Altered source versions must be plainly marked as such, and must not
++//    be misrepresented as being the original software.
++//
++// 3. This notice may not be removed or altered from any source
++//    distribution.
++
++// Include loadbmp.h as following
++// to create the implementation file.
++//
++// #define LOADBMP_IMPLEMENTATION
++// #include "loadbmp.h"
++
++#ifndef LOADBMP_H
++#define LOADBMP_H
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++
++// Errors
++#define LOADBMP_NO_ERROR 0
++
++#define LOADBMP_OUT_OF_MEMORY 1
++
++#define LOADBMP_FILE_NOT_FOUND 2
++#define LOADBMP_FILE_OPERATION 3
++
++#define LOADBMP_INVALID_FILE_FORMAT 4
++
++#define LOADBMP_INVALID_SIGNATURE 5
++#define LOADBMP_INVALID_BITS_PER_PIXEL 6
++
++
++// Components
++#define LOADBMP_RGB  3
++#define LOADBMP_RGBA 4
++
++
++#ifdef LOADBMP_IMPLEMENTATION
++#	define LOADBMP_API
++#else
++#	define LOADBMP_API extern
++#endif
++
++
++// LoadBMP uses raw buffers and support RGB and RGBA formats.
++// The order is RGBRGBRGB... or RGBARGBARGBA..., from top left
++// to bottom right, without any padding.
++
++
++LOADBMP_API unsigned int loadbmp_decode_file(
++	const char *filename, unsigned char **imageData, unsigned int *width, unsigned int *height, unsigned int components);
++
++LOADBMP_API unsigned int loadbmp_encode_file(
++	const char *filename, const unsigned char *imageData, unsigned int width, unsigned int height, unsigned int components);
++
++
++#ifdef LOADBMP_IMPLEMENTATION
++
++// Disable Microsoft Visual C++ compiler security warnings for fopen, strcpy, etc being unsafe
++#if defined(_MSC_VER) && (_MSC_VER >= 1310)
++#	pragma warning(disable: 4996)
++#endif
++
++#include <stdlib.h> /* malloc(), free() */
++#include <string.h> /* memset(), memcpy() */
++#include <stdio.h> /* fopen(), fwrite(), fread(), fclose() */
++
++
++LOADBMP_API unsigned int loadbmp_decode_file(
++	const char *filename, unsigned char **imageData, unsigned int *width, unsigned int *height, unsigned int components)
++{
++	FILE *f = fopen(filename, "rb");
++
++	if (!f)
++		return LOADBMP_FILE_NOT_FOUND;
++
++	unsigned char bmp_file_header[14];
++	unsigned char bmp_info_header[40];
++	unsigned char bmp_pad[3];
++
++	unsigned int w, h;
++	unsigned char *data = NULL;
++
++	unsigned int x, y, i, padding;
++
++	memset(bmp_file_header, 0, sizeof(bmp_file_header));
++	memset(bmp_info_header, 0, sizeof(bmp_info_header));
++
++	if (fread(bmp_file_header, sizeof(bmp_file_header), 1, f) == 0)
++	{
++		fclose(f);
++		return LOADBMP_INVALID_FILE_FORMAT;
++	}
++
++	if (fread(bmp_info_header, sizeof(bmp_info_header), 1, f) == 0)
++	{
++		fclose(f);
++		return LOADBMP_INVALID_FILE_FORMAT;
++	}
++
++	if ((bmp_file_header[0] != 'B') || (bmp_file_header[1] != 'M'))
++	{
++		fclose(f);
++		return LOADBMP_INVALID_SIGNATURE;
++	}
++
++	if ((bmp_info_header[14] != 24) && (bmp_info_header[14] != 32))
++	{
++		fclose(f);
++		return LOADBMP_INVALID_BITS_PER_PIXEL;
++	}
++
++	w = (bmp_info_header[4] + (bmp_info_header[5] << 8) + (bmp_info_header[6] << 16) + (bmp_info_header[7] << 24));
++	h = (bmp_info_header[8] + (bmp_info_header[9] << 8) + (bmp_info_header[10] << 16) + (bmp_info_header[11] << 24));
++
++	if ((w > 0) && (h > 0))
++	{
++		data = (unsigned char*)malloc(w * h * components);
++
++		if (!data)
++		{
++			fclose(f);
++			return LOADBMP_OUT_OF_MEMORY;
++		}
++
++		for (y = (h - 1); y != -1; y--)
++		{
++			for (x = 0; x < w; x++)
++			{
++				i = (x + y * w) * components;
++
++				if (fread(data + i, 3, 1, f) == 0)
++				{
++					free(data);
++
++					fclose(f);
++					return LOADBMP_INVALID_FILE_FORMAT;
++				}
++
++				data[i] ^= data[i + 2] ^= data[i] ^= data[i + 2]; // BGR -> RGB
++
++				if (components == LOADBMP_RGBA)
++					data[i + 3] = 255;
++			}
++
++			padding = ((4 - (w * 3) % 4) % 4);
++
++			if (fread(bmp_pad, 1, padding, f) != padding)
++			{
++				free(data);
++
++				fclose(f);
++				return LOADBMP_INVALID_FILE_FORMAT;
++			}
++		}
++	}
++
++	(*width) = w;
++	(*height) = h;
++	(*imageData) = data;
++
++	fclose(f);
++
++	return LOADBMP_NO_ERROR;
++}
++
++
++LOADBMP_API unsigned int loadbmp_encode_file(
++	const char *filename, const unsigned char *imageData, unsigned int width, unsigned int height, unsigned int components)
++{
++	FILE *f = fopen(filename, "wb");
++
++	if (!f)
++		return LOADBMP_FILE_OPERATION;
++
++	unsigned char bmp_file_header[14] = { 'B', 'M', 0, 0, 0, 0, 0, 0, 0, 0, 54, 0, 0, 0 };
++	unsigned char bmp_info_header[40] = { 40, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 24, 0 };
++	const unsigned char bmp_pad[3] = { 0, 0, 0 };
++
++	const unsigned int size = 54 + width * height * 3; // 3 as the BMP format uses 3 channels (red, green, blue and NO alpha)
++
++	unsigned int x, y, i, padding;
++
++	unsigned char pixel[3];
++
++	bmp_file_header[2] = (unsigned char)(size);
++	bmp_file_header[3] = (unsigned char)(size >> 8);
++	bmp_file_header[4] = (unsigned char)(size >> 16);
++	bmp_file_header[5] = (unsigned char)(size >> 24);
++
++	bmp_info_header[4] = (unsigned char)(width);
++	bmp_info_header[5] = (unsigned char)(width >> 8);
++	bmp_info_header[6] = (unsigned char)(width >> 16);
++	bmp_info_header[7] = (unsigned char)(width >> 24);
++
++	bmp_info_header[8] = (unsigned char)(height);
++	bmp_info_header[9] = (unsigned char)(height >> 8);
++	bmp_info_header[10] = (unsigned char)(height >> 16);
++	bmp_info_header[11] = (unsigned char)(height >> 24);
++
++	if (fwrite(bmp_file_header, 14, 1, f) == 0)
++	{
++		fclose(f);
++		return LOADBMP_FILE_OPERATION;
++	}
++
++	if (fwrite(bmp_info_header, 40, 1, f) == 0)
++	{
++		fclose(f);
++		return LOADBMP_FILE_OPERATION;
++	}
++
++	for (y = (height - 1); y != -1; y--)
++	{
++		for (x = 0; x < width; x++)
++		{
++			i = (x + y * width) * components;
++
++			memcpy(pixel, imageData + i, sizeof(pixel));
++
++			pixel[0] ^= pixel[2] ^= pixel[0] ^= pixel[2]; // RGB -> BGR
++
++			if (fwrite(pixel, sizeof(pixel), 1, f) == 0)
++			{
++				fclose(f);
++				return LOADBMP_FILE_OPERATION;
++			}
++		}
++
++		padding = ((4 - (width * 3) % 4) % 4);
++
++		if (fwrite(bmp_pad, 1, padding, f) != padding)
++		{
++			fclose(f);
++			return LOADBMP_FILE_OPERATION;
++		}
++	}
++
++	fclose(f);
++
++	return LOADBMP_NO_ERROR;
++}
++
++
++#endif
++
++#ifdef __cplusplus
++}
++#endif
++
++#endif
+\ No newline at end of file
+diff --git a/x11vnc/pointer.c b/x11vnc/pointer.c
+index f2f29b0..c6657c2 100644
+--- a/x11vnc/pointer.c
++++ b/x11vnc/pointer.c
+@@ -654,6 +654,7 @@ static void pipe_pointer(int mask, int x, int y, rfbClientPtr client) {
+ 	check_pipeinput();
+ }
+ 
++static int active_zone=0;
+ /*
+  * Actual callback from libvncserver when it gets a pointer event.
+  * This may queue pointer events rather than sending them immediately
+@@ -664,6 +665,60 @@ void pointer_event(int mask, int x, int y, rfbClientPtr client) {
+ 	int sent = 0, buffer_it = 0;
+ 	double now;
+ 
++	if(backdrop_image)
++	{
++		if(x>backdropfb_x_offset &&
++		y>backdropfb_y_offset &&
++		x<backdropfb_x_offset+backdropfb_width &&
++		y<backdropfb_y_offset+backdropfb_height )
++		{
++			//inside framebuffer
++			x-=backdropfb_x_offset;
++			y-=backdropfb_y_offset;
++			if(active_zone)
++			{
++				//normally not reached
++				//printf("release inside %i\n",active_zone);
++				keyboard(0,active_zone,client);
++			}
++			active_zone = 0;
++		}
++		else
++		{
++			//outside framebuffer
++			int found = 0;
++			if(mask&1)
++			{
++				for(int i = 0; i < mouse_zone_count; i++)
++				{
++					if(x>mouse_zones[i].x && x<mouse_zones[i].x + mouse_zones[i].w &&
++					   y>mouse_zones[i].y && y<mouse_zones[i].y + mouse_zones[i].h )
++					{
++						found = mouse_zones[i].keycode;
++						//printf("found %i\n",found);
++						break;
++					}
++				}
++			}
++			if(active_zone!=found)
++			{
++				if(found)
++				{
++					//printf("softkey down %i\n",found);
++					keyboard(1,found,client);
++				}
++				else
++				{
++					//printf("softkey up %i\n",active_zone);
++					keyboard(0,active_zone,client);
++				}
++			}
++			active_zone = found;
++			//do not forward to mouse handler code
++			return;
++		}
++	} //endif (backdrop_image)
++
+ 	if (threads_drop_input) {
+ 		return;
+ 	}
+diff --git a/x11vnc/scan.c b/x11vnc/scan.c
+index 2b03666..d20db3d 100644
+--- a/x11vnc/scan.c
++++ b/x11vnc/scan.c
+@@ -1613,6 +1613,23 @@ if (0) fprintf(stderr, "rcurs: %d %d  %d %d\n", x, y, xn, yn);
+ 	}
+ }
+ 
++void copy_backdrop_fb(int x1, int y1, int x2, int y2) {
++	int x, y;
++	char *src, *dst;
++
++	int fbl = rfb_bytes_per_line;
++
++	char *src_0 = rfb_fb;
++	char *dst_0 = backdrop_image;
++
++	for (y = y1; y < y2; y++)  {
++		src = src_0 + fbl*y + 4*x1;
++		dst = dst_0 + (backdrop_width*4)*(y+backdropfb_y_offset) + 4*(x1+backdropfb_x_offset);
++		memcpy(dst,src,(x2-x1)*4);
++	}
++
++}
++
+ void mark_wrapper(int x1, int y1, int x2, int y2) {
+ 	int t, r_x1 = x1, r_y1 = y1, r_x2 = x2, r_y2 = y2;
+ 
+@@ -1637,6 +1654,16 @@ void mark_wrapper(int x1, int y1, int x2, int y2) {
+ 		r_y1--;
+ 		r_y2++;
+ 	}
++	else if(backdrop_image)
++	{
++		copy_backdrop_fb(x1, y1, x2, y2);
++		rfbMarkRectAsModified(screen,
++			x1+backdropfb_x_offset,
++			y1+backdropfb_y_offset,
++			x2+backdropfb_x_offset,
++			y2+backdropfb_y_offset);
++		return;
++	}
+ 	rfbMarkRectAsModified(screen, r_x1, r_y1, r_x2, r_y2);
+ }
+ 
+diff --git a/x11vnc/screen.c b/x11vnc/screen.c
+index 2b74241..4b706b6 100644
+--- a/x11vnc/screen.c
++++ b/x11vnc/screen.c
+@@ -61,6 +61,8 @@ so, delete this exception statement from your version.
+ #include "xrandr.h"
+ #include "xrecord.h"
+ #include "pm.h"
++#include "loadbmp.h"
++
+ 
+ #include <rfb/rfbclient.h>
+ 
+@@ -3103,6 +3105,41 @@ static rfbBool set_xlate_wrapper(rfbClientPtr cl) {
+ 	return rfbSetTranslateFunction(cl);	
+ }
+ 
++int load_backdrop(const char *filename) /* updated */
++{
++	if(loadbmp_decode_file(filename,&backdrop_image,&backdrop_width,&backdrop_height,LOADBMP_RGBA)!=LOADBMP_NO_ERROR)
++		return 0;
++
++	/* fix color format */
++	for(int i=0;i<backdrop_width*backdrop_height;i++)
++	{
++		char tmp = backdrop_image[i*4];
++		backdrop_image[i*4] = backdrop_image[i*4+2];
++		backdrop_image[i*4+2] = tmp;
++	}
++	
++	return 1;
++}
++
++#ifdef BACKDROP_DEBUG
++void dump_fb(int width,int height)
++{
++	printf("write bmp file width=%i heigth=%i\n",width,height);
++	char* imagedata = malloc(width*height*3);
++	char *fb0 = rfb_fb;
++	for(int y = 0; y < height; y++) {
++		for(int x = 0; x < width; x++) {
++			imagedata[(y*width+x)*3+0] = fb0[(y*width+x)*4+0];
++			imagedata[(y*width+x)*3+1] = fb0[(y*width+x)*4+1];
++			imagedata[(y*width+x)*3+2] = fb0[(y*width+x)*4+2];
++		}
++	}
++
++	loadbmp_encode_file("/tmp/dump_fb.bmp",imagedata,width,height,3);
++	free(imagedata);
++}
++#endif
++
+ /*
+  * initialize the rfb framebuffer/screen
+  */
+@@ -3110,6 +3147,7 @@ void initialize_screen(int *argc, char **argv, XImage *fb) {
+ 	int have_masks = 0;
+ 	int width  = fb->width;
+ 	int height = fb->height;
++
+ 	int create_screen = screen ? 0 : 1;
+ 	int bits_per_color;
+ 	int fb_bpp, fb_Bpl, fb_depth;
+@@ -3243,6 +3281,16 @@ void initialize_screen(int *argc, char **argv, XImage *fb) {
+ 		}
+ 		screen = rfbGetScreen(argc, argv, width, height,
+ 		    bits_per_color, 1, fb_bpp/8);
++		read_backdrop_config(screen->port);
++		if(backdrop_image)
++		{
++			backdropfb_width = width;
++			backdropfb_height = height;
++			width = backdrop_width;
++			height = backdrop_height;
++			screen->width = width;
++			screen->height = height;
++		}
+ 		if (screen && http_dir) {
+ 			http_connections(1);
+ 		}
+@@ -3296,12 +3344,20 @@ void initialize_screen(int *argc, char **argv, XImage *fb) {
+ 		clean_up_exit(1);
+ 	}
+ 
+-	/* set up format from scratch: */
+-	if (rotating && ! rotating_same) {
+-		screen->paddedWidthInBytes = rot_bytes_per_line;
+-	} else {
+-		screen->paddedWidthInBytes = rfb_bytes_per_line;
++	if(backdrop_image)
++	{
++		screen->paddedWidthInBytes = backdrop_width*4;
+ 	}
++	else
++	{
++		/* set up format from scratch: */
++		if (rotating && ! rotating_same) {
++			screen->paddedWidthInBytes = rot_bytes_per_line;
++		} else {
++			screen->paddedWidthInBytes = rfb_bytes_per_line;
++		}
++	}
++
+ 	screen->serverFormat.bitsPerPixel = fb_bpp;
+ 	screen->serverFormat.depth = fb_depth;
+ 	screen->serverFormat.trueColour = TRUE;
+@@ -3621,11 +3677,22 @@ void initialize_screen(int *argc, char **argv, XImage *fb) {
+ 			rfb_fb = main_fb;
+ 		}
+ 	}
+-	if (rot_fb) {
+-		screen->frameBuffer = rot_fb;
+-	} else {
+-		screen->frameBuffer = rfb_fb;
++
++
++	if(backdrop_image)
++	{
++		screen->frameBuffer = backdrop_image;
+ 	}
++	else
++	{
++		if (rot_fb) {
++			screen->frameBuffer = rot_fb;
++		} else {
++			screen->frameBuffer = rfb_fb;
++		}
++	}
++
++
+ 	if (verbose) {
+ 		fprintf(stderr, " rfb_fb:      %p\n", rfb_fb);
+ 		fprintf(stderr, " main_fb:     %p\n", main_fb);
+@@ -3642,8 +3709,11 @@ void initialize_screen(int *argc, char **argv, XImage *fb) {
+ 	parse_scroll_copyrect();
+ 	setup_cursors_and_push();
+ 
+-	if (scaling || rotating || cmap8to24) {
++	if (scaling || rotating || cmap8to24 || backdrop_image) {
+ 		mark_rect_as_modified(0, 0, dpy_x, dpy_y, 0);
++		#ifdef BACKDROP_DEBUG
++		if(backdrop_image) dump_fb(dpy_x, dpy_y);
++		#endif
+ 	}
+ 
+ 	if (! create_screen) {
+diff --git a/x11vnc/screen.h b/x11vnc/screen.h
+index 8c6f146..6adbd1b 100644
+--- a/x11vnc/screen.h
++++ b/x11vnc/screen.h
+@@ -51,6 +51,7 @@ extern void parse_scale_string(char *str, double *factor_x, double *factor_y, in
+     int *nomult4, int *pad, int *interpolate, int *numer, int *denom, int w_in, int h_in);
+ extern int parse_rotate_string(char *str, int *mode);
+ extern int scale_round(int len, double fac);
++extern int load_backdrop(const char *filename);
+ extern void initialize_screen(int *argc, char **argv, XImage *fb);
+ extern void set_vnc_desktop_name(void);
+ extern void announce(int lport, int ssl, char *iface);
+diff --git a/x11vnc/x11vnc.c b/x11vnc/x11vnc.c
+index b633125..ea85412 100644
+--- a/x11vnc/x11vnc.c
++++ b/x11vnc/x11vnc.c
+@@ -162,6 +162,8 @@
+ #include "pm.h"
+ #include "solid.h"
+ 
++#include <libconfig.h>
++
+ /*
+  * main routine for the x11vnc program
+  */
+@@ -2045,6 +2047,105 @@ static void check_guess_auth_file(void)  {
+ 
+ extern int is_decimal(char *);
+ 
++void read_backdrop_config(int port)
++{
++	config_t cfg;
++	const char *backdrop_filename=0;
++	config_setting_t *root, *setting;
++
++	config_init(&cfg);
++	char fn[32];
++	sprintf(fn,"/var/run/vnc-backdrop-%i.cfg",port);
++	if(! config_read_file(&cfg, fn))
++	{
++		rfbLog("read backdrop config failed %s:%d - %s\n", 
++		config_error_file(&cfg),
++		config_error_line(&cfg), 
++		config_error_text(&cfg));
++		config_destroy(&cfg);
++		return;
++	}
++	config_lookup_string(&cfg, "backdrop", &backdrop_filename);
++
++	// load backdrop here
++	if(backdrop_filename && strlen(backdrop_filename))
++	{
++		if(load_backdrop(backdrop_filename)==0) {
++			rfbLog("load backdrop failed\n");
++			config_destroy(&cfg);
++			return;
++		}
++		
++	}
++
++	root = config_root_setting(&cfg);
++
++	setting = config_setting_get_member(root, "framebuffer");
++	if(!setting)
++	{
++		rfbLog("Setting [framebuffer] not found\n");
++	}
++	else
++	{
++		config_setting_lookup_int(setting,"x",&backdropfb_x_offset);
++		config_setting_lookup_int(setting,"y",&backdropfb_y_offset);
++	}
++
++	setting = config_setting_get_member(root, "metrom");
++	if(!setting)
++	{
++		 rfbLog("Setting [metrom] not found\n");
++	}
++	else
++	{
++		 config_setting_lookup_int(setting,"x",&screen_overlay_x_offset);
++		 config_setting_lookup_int(setting,"y",&screen_overlay_y_offset);
++	}
++
++	setting = config_lookup(&cfg, "zones");
++	if(!setting)
++	{
++		rfbLog("Setting [zones] not found\n");
++	}
++	else
++	{
++		int count = config_setting_length(setting);
++		//int invalid_count = 0;
++		mouse_zones = malloc(count*sizeof(struct mouse_zone));
++		int j = 0;
++		for(int i = 0; i < count; ++i) //can use while here ?
++		{
++			config_setting_t *zone = config_setting_get_elem(setting, i);
++
++			int x=0;
++			int y=0;
++			int w=0;
++			int h=0;
++			int keycode=0; //rename to keysym?
++			if(config_setting_lookup_int(zone,"x",&x)==CONFIG_FALSE) continue;
++			if(config_setting_lookup_int(zone,"y",&y)==CONFIG_FALSE) continue;
++			if(config_setting_lookup_int(zone,"w",&w)==CONFIG_FALSE) continue;
++			if(config_setting_lookup_int(zone,"h",&h)==CONFIG_FALSE) continue;
++			if(config_setting_lookup_int(zone,"keycode",&keycode)==CONFIG_FALSE) continue;
++			if(x==0 || y==0 || w==0 || h==0 || keycode == 0) continue;
++
++			mouse_zones[j].x = x;
++			mouse_zones[j].y = y;
++			mouse_zones[j].w = w;
++			mouse_zones[j].h = h;
++			mouse_zones[j].keycode = keycode;
++			j++;
++
++		}
++		
++		if(j<count) {
++			mouse_zones = realloc(mouse_zones, j*sizeof(struct mouse_zone));
++		}
++		mouse_zone_count = j;
++	}
++	config_destroy(&cfg); //collect garbage
++}
++
+ int main(int argc, char* argv[]) {
+ 
+ 	int i, len, tmpi;
+@@ -5674,7 +5775,7 @@ int main(int argc, char* argv[]) {
+ 		argv_vnc[argc_vnc++] = choose_title(use_dpy);
+ 		rfb_desktop_name = strdup(argv_vnc[argc_vnc-1]);
+ 	}
+-	
++
+ 	/*
+ 	 * Create the XImage corresponding to the display framebuffer.
+ 	 */
+@@ -5905,7 +6006,7 @@ int main(int argc, char* argv[]) {
+ 			    " for more info.\n");
+ 		}
+ 	}
+-	set_vnc_desktop_name();
++	set_vnc_desktop_name(); // screen->port is set here
+ 
+ 	if (ncache_beta_tester && (ncache != 0 || ncache_msg)) {
+ 		ncache_beta_tester_message();
+diff --git a/x11vnc/x11vnc.h b/x11vnc/x11vnc.h
+index 2eab38f..49439c0 100644
+--- a/x11vnc/x11vnc.h
++++ b/x11vnc/x11vnc.h
+@@ -567,6 +567,33 @@ extern int rotating;
+ extern int rotating_same;
+ extern int rotating_cursors;
+ 
++/* backdrop */
++extern unsigned int backdrop_height;
++extern unsigned int backdrop_width;
++extern unsigned int backdropfb_x_offset;
++extern unsigned int backdropfb_y_offset;
++extern unsigned int backdropfb_height;
++extern unsigned int backdropfb_width;
++extern unsigned char *backdrop_image;
++void read_backdrop_config(int port);
++
++/* mouse zones */
++struct mouse_zone
++{
++	int x;
++	int y;
++	int w;
++	int h;
++	int keycode;
++};
++
++extern struct mouse_zone* mouse_zones;
++extern int mouse_zone_count;
++
++/* screen overlay (red M) */
++extern int screen_overlay_x_offset;
++extern int screen_overlay_y_offset;
++
+ /* scale cursor */
+ extern char *scale_cursor_str;
+ extern double scale_cursor_fac_x;
+diff --git a/x11vnc/x11vnc_defs.c b/x11vnc/x11vnc_defs.c
+index 3f2b6b4..24804c4 100644
+--- a/x11vnc/x11vnc_defs.c
++++ b/x11vnc/x11vnc_defs.c
+@@ -33,6 +33,8 @@ so, delete this exception statement from your version.
+ /* -- x11vnc_defs.c -- */
+ 
+ #include "x11vnc.h"
++#define LOADBMP_IMPLEMENTATION
++#include "loadbmp.h"
+ 
+ int overlay_present = 0;
+ 
+@@ -139,6 +141,23 @@ int rotating = 0;
+ int rotating_same = 0;
+ int rotating_cursors = 0;
+ 
++/* backdrop */
++unsigned int backdrop_height = 0;
++unsigned int backdrop_width = 0;
++unsigned int backdropfb_x_offset = 0;
++unsigned int backdropfb_y_offset = 0;
++unsigned int backdropfb_height = 0;
++unsigned int backdropfb_width = 0;
++unsigned char *backdrop_image = 0;
++
++/* screen overlay (red M) */
++int screen_overlay_x_offset = 437;
++int screen_overlay_y_offset = 5;
++
++/* mouse zones */
++struct mouse_zone* mouse_zones = 0;
++int mouse_zone_count = 0;
++
+ /* scale cursor */
+ char *scale_cursor_str = NULL;
+ double scale_cursor_fac_x = 1.0;

@@ -1,0 +1,175 @@
+From: Tobias Platen <tobias.platen@minebea-intec.com>
+Date: Thu, 7 Apr 2022 15:04:00 +0200
+Subject: [PATCH] implement more letters
+
+---
+ x11vnc/uinput.c | 87 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++------
+ 1 file changed, 81 insertions(+), 6 deletions(-)
+
+diff --git a/x11vnc/uinput.c b/x11vnc/uinput.c
+index 9758bdd..e493ae6 100644
+--- a/x11vnc/uinput.c
++++ b/x11vnc/uinput.c
+@@ -1299,10 +1299,34 @@ static int umlaut(int code)
+ 			
+ 		case 0xb5: 
+ 			return KEY_M; //"mu"
++			
++		//misc
++		case 0xb0:
++			return KEY_F14; //"degree"
++			
++		case 0xb2: 
++			return KEY_F15; //"twosuperior"
++			
++		case 0xb3: 
++			return KEY_F16; //"threesuperior"
++			
++		case 0xfe52: 
++			return KEY_F17; //"dead_circumflex"
++			
++		case 0xfe51: 
++			return KEY_F18; //"dead_acute"
++			
++		case 0xfe50: 
++			return KEY_F19; //"dead_grave"
++			
+ 	}
+ 	return -1;
+ }
+ 
++static int shift_down=0;
++
++#define SEND_SHIFT(down,scancode) {memset(&ev, 0, sizeof(ev)); gettimeofday(&ev.time, NULL); ev.type = EV_KEY; ev.code = (unsigned char) scancode; ev.value = down;  write(d, &ev, sizeof(ev));}
++
+ void uinput_key_command(int down, int keysym, rfbClientPtr client) {
+ #ifdef UINPUT_OK
+ 	struct input_event ev;
+@@ -1328,17 +1352,17 @@ void uinput_key_command(int down, int keysym, rfbClientPtr client) {
+ 		
+ 		if(down)
+ 		{
+-			//key_pressed[KEY_RIGHTALT] = 1;
++			key_pressed[KEY_RIGHTMETA] = 1;
+ 			memset(&ev, 0, sizeof(ev));
+ 			gettimeofday(&ev.time, NULL);
+ 			ev.type = EV_KEY;
+ 			ev.code = (unsigned char) KEY_RIGHTMETA;
+ 			ev.value = 1;
+ 			write(d, &ev, sizeof(ev));
+ 			
+ 			usleep(10000);
+ 			
+-			//key_pressed[u] = 1;
++			key_pressed[u] = 1;
+ 			memset(&ev, 0, sizeof(ev));
+ 			gettimeofday(&ev.time, NULL);
+ 			ev.type = EV_KEY;
+@@ -1354,7 +1378,7 @@ void uinput_key_command(int down, int keysym, rfbClientPtr client) {
+ 		else
+ 		{
+ 			
+-			//key_pressed[KEY_RIGHTALT] = 0;
++			key_pressed[KEY_RIGHTMETA] = 0;
+ 			memset(&ev, 0, sizeof(ev));
+ 			gettimeofday(&ev.time, NULL);
+ 			ev.type = EV_KEY;
+@@ -1384,24 +1408,75 @@ void uinput_key_command(int down, int keysym, rfbClientPtr client) {
+ 	}
+ 
+ 	scancode = lookup_code(keysym);
++	
++	if(scancode==KEY_LEFTSHIFT || scancode==KEY_RIGHTSHIFT)
++	{
++		shift_down = down;
++	}
++	
++	int meta=0;
++	#define META(k) if(keysym == k) {printf("%s must be shifted: META\n",#k); meta=1; }
++	#define META_INVERT(k) if(keysym == k) {printf("%s must NOT be shifted: META\n",#k); meta=1; }
++	// un:dead_circumflex[^], degree[°] -- not working
++	if(shift_down==0) 
++	{
++		META(XK_numbersign);
++		META(XK_plus);
++		META(XK_braceleft);
++		META(XK_braceright);
++		META(XK_at);
++		META(XK_asciitilde);
++		META(XK_bar);
++	}
++	else
++	{
++		META_INVERT(XK_slash);
++		META_INVERT(XK_equal);
++		META_INVERT(XK_semicolon);
++		META_INVERT(XK_apostrophe);
++	}
+ 
+ 	if (scancode < 0) {
+ 		return;
+ 	}
+ 	if (db) fprintf(stderr, "uinput_key_command: %d -> %d %s fd=%d\n", keysym, scancode, down ? "down" : "up", d);
++	
++	if(meta)
++	{
++		key_pressed[KEY_RIGHTMETA] = 0;
++		memset(&ev, 0, sizeof(ev));
++		gettimeofday(&ev.time, NULL);
++		ev.type = EV_KEY;
++		ev.code = (unsigned char) KEY_RIGHTMETA;
++		ev.value = 1;
++		write(d, &ev, sizeof(ev));
++	}
+ 
+ 	memset(&ev, 0, sizeof(ev));
+ 	gettimeofday(&ev.time, NULL);
+ 	ev.type = EV_KEY;
+ 	ev.code = (unsigned char) scancode;
+ 	ev.value = down;
+ 
+ 	write(d, &ev, sizeof(ev));
++	
++	if(meta)
++	{
++		key_pressed[KEY_RIGHTMETA] = 0;
++		memset(&ev, 0, sizeof(ev));
++		gettimeofday(&ev.time, NULL);
++		ev.type = EV_KEY;
++		ev.code = (unsigned char) KEY_RIGHTMETA;
++		ev.value = 0;
++		write(d, &ev, sizeof(ev));
++	}
+ 
+ 	ev.type = EV_SYN;
+ 	ev.code = SYN_REPORT;
+ 	ev.value = 0;
+ 	write(d, &ev, sizeof(ev));
++	
++	
+ 
+ 	if (0 <= scancode && scancode < 256) {
+ 		key_pressed[scancode] = down ? 1 : 0;
+@@ -1448,8 +1523,8 @@ static int lookup_code(int keysym) {
+ 	case XK_parenright:	return KEY_0;
+ 	case XK_minus:	return KEY_MINUS;
+ 	case XK_underscore:	return KEY_MINUS;
+-	case XK_equal:	return KEY_EQUAL;
+-	case XK_plus:	return KEY_EQUAL;
++	case XK_equal:	return KEY_EQUAL;  //FIXME has shift
++	case XK_plus:	return KEY_EQUAL;  //FIXME has no shift
+ 	case XK_BackSpace:	return KEY_BACKSPACE;
+ 	case XK_Tab:		return KEY_TAB;
+ 	case XK_q:		return KEY_Q;
+@@ -1523,7 +1598,7 @@ static int lookup_code(int keysym) {
+ 	case XK_less:	return KEY_COMMA;
+ 	case XK_period:	return KEY_DOT;
+ 	case XK_greater:	return KEY_DOT;
+-	case XK_slash:	return KEY_SLASH;
++	case XK_slash:	return KEY_SLASH; //FIXME has shift
+ 	case XK_question:	return KEY_SLASH;
+ 	case XK_Shift_R:	return KEY_RIGHTSHIFT;
+ 	case XK_KP_Multiply:	return KEY_KPASTERISK;
+--
+libgit2 0.26.0
+

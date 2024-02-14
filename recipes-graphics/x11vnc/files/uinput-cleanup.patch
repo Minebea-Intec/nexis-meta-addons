@@ -1,0 +1,101 @@
+diff --git a/x11vnc/uinput.c b/x11vnc/uinput.c
+index c91f27c..b32d9c3 100644
+--- a/x11vnc/uinput.c
++++ b/x11vnc/uinput.c
+@@ -1222,19 +1222,22 @@ void uinput_pointer_command(int mask, int x, int y, rfbClientPtr client) {
+ 
+ static void send_umlaut(int code)
+ {
+-	printf("UNICODE\n");
+ 	key_t key = 0xfcecb34; // == key_from_ident("x11vnc_unicode_input",4,0);
+ 	int shmid=shmget(key,4,IPC_CREAT|SHM_NORESERVE|0777);
+ 	if(shmid<0) return;
+ 	int *ptr=(int*)shmat(shmid,0,0);
+ 	if(ptr==0) return;
+-	printf("UNICODE assign\n");
+ 	*ptr=code;
+ }
+ 
+ static int umlaut(int code)
+ {
+-	printf("UMLAUT %x\n",code);
++	if(code>32 && code<127)
++	{
++		send_umlaut(code);
++		return KEY_F24;
++	}
++
+ 	//write byte to fifo
+ 	switch(code)
+ 	{
+@@ -1441,7 +1444,6 @@ void uinput_key_command(int down, int keysym, rfbClientPtr client) {
+ 			ev.value = 0;
+ 			write(d, &ev, sizeof(ev));
+ 			
+-			
+ 			usleep(10000);
+ 			
+ 			key_pressed[u] = 0;
+@@ -1470,44 +1472,11 @@ void uinput_key_command(int down, int keysym, rfbClientPtr client) {
+ 	{
+ 		shift_down = down;
+ 	}
+-	
+-	int meta=0;
+-	#define META(k) if(keysym == k) {printf("%s must be shifted: META\n",#k); meta=1; }
+-	#define META_INVERT(k) if(keysym == k) {printf("%s must NOT be shifted: META\n",#k); meta=1; }
+-	if(shift_down==0) 
+-	{
+-		META(XK_numbersign);
+-		META(XK_plus);
+-		META(XK_braceleft);
+-		META(XK_braceright);
+-		META(XK_at);
+-		META(XK_asciitilde);
+-		META(XK_bar);
+-		META(XK_less);
+-	}
+-	else
+-	{
+-		META_INVERT(XK_slash);
+-		META_INVERT(XK_equal);
+-		META_INVERT(XK_semicolon);
+-		META_INVERT(XK_apostrophe);
+-	}
+ 
+ 	if (scancode < 0) {
+ 		return;
+ 	}
+ 	if (db) fprintf(stderr, "uinput_key_command: %d -> %d %s fd=%d\n", keysym, scancode, down ? "down" : "up", d);
+-	
+-	if(meta)
+-	{
+-		key_pressed[KEY_RIGHTMETA] = 0;
+-		memset(&ev, 0, sizeof(ev));
+-		gettimeofday(&ev.time, NULL);
+-		ev.type = EV_KEY;
+-		ev.code = (unsigned char) KEY_RIGHTMETA;
+-		ev.value = 1;
+-		write(d, &ev, sizeof(ev));
+-	}
+ 
+ 	memset(&ev, 0, sizeof(ev));
+ 	gettimeofday(&ev.time, NULL);
+@@ -1516,17 +1485,6 @@ void uinput_key_command(int down, int keysym, rfbClientPtr client) {
+ 	ev.value = down;
+ 
+ 	write(d, &ev, sizeof(ev));
+-	
+-	if(meta)
+-	{
+-		key_pressed[KEY_RIGHTMETA] = 0;
+-		memset(&ev, 0, sizeof(ev));
+-		gettimeofday(&ev.time, NULL);
+-		ev.type = EV_KEY;
+-		ev.code = (unsigned char) KEY_RIGHTMETA;
+-		ev.value = 0;
+-		write(d, &ev, sizeof(ev));
+-	}
+ 
+ 	ev.type = EV_SYN;
+ 	ev.code = SYN_REPORT;

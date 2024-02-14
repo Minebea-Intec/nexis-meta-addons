@@ -1,0 +1,220 @@
+diff --git a/x11vnc/uinput.c b/x11vnc/uinput.c
+index 3e02223..c91f27c 100644
+--- a/x11vnc/uinput.c
++++ b/x11vnc/uinput.c
+@@ -1219,105 +1219,160 @@ void uinput_pointer_command(int mask, int x, int y, rfbClientPtr client) {
+ 	bmask = mask;
+ }
+ 
++
++static void send_umlaut(int code)
++{
++	printf("UNICODE\n");
++	key_t key = 0xfcecb34; // == key_from_ident("x11vnc_unicode_input",4,0);
++	int shmid=shmget(key,4,IPC_CREAT|SHM_NORESERVE|0777);
++	if(shmid<0) return;
++	int *ptr=(int*)shmat(shmid,0,0);
++	if(ptr==0) return;
++	printf("UNICODE assign\n");
++	*ptr=code;
++}
++
+ static int umlaut(int code)
+ {
++	printf("UMLAUT %x\n",code);
++	//write byte to fifo
+ 	switch(code)
+ 	{
+ 		//first row
+ 		case 0xe4:
+ 		case 0xc4:
+-			return KEY_Q; //"adiaeresis"
++			//return KEY_Q; //"adiaeresis"
+ 		
+ 		case 0xe5: 
+ 		case 0xc5:
+-			return KEY_W; //"aring"
++			//return KEY_W; //"aring"
+ 		
+ 		case 0xe9: 
+ 		case 0xc9: 
+-			return KEY_E; //"eacute"
++			//return KEY_E; //"eacute"
+ 			
+ 		case 0xeb:
+ 		case 0xcb: 
+-			return KEY_R; //"ediaeresis"
++			//return KEY_R; //"ediaeresis"
+ 		
+ 		case 0xfe: 
+ 		case 0xde:
+-			return KEY_T; //"thorn"
++			//return KEY_T; //"thorn"
+ 			
+ 		case 0xfc:
+ 		case 0xdc:
+-			return KEY_Y; //udiaeresis"
++			//return KEY_Y; //udiaeresis"
+ 			
+ 		case 0xfa:
+ 		case 0xda: 
+-			return KEY_U; //"uacute"
++			//return KEY_U; //"uacute"
+ 		
+ 		case 0xed: 
+ 		case 0xcd:
+-			return KEY_I; //"iacute"
++			//return KEY_I; //"iacute"
+ 			
+ 		case 0xf3: 
+ 		case 0xd3:
+-			return KEY_O; //"oacute"
++			//return KEY_O; //"oacute"
+ 			
+ 		case 0xf6: 
+ 		case 0xd6:
+-			return KEY_P; //"odiaeresis" -- broken 
++			//return KEY_P; //"odiaeresis" -- broken 
+ 		
+ 		//second row
+ 		case 0xe1:
+ 		case 0xc1:
+-			return KEY_A; //"aacute"
++			//return KEY_A; //"aacute"
+ 			
+ 		case 0xdf: //"ssharp"
+ 		case 0xa7: //"section"
+-			return KEY_S; 
++			//return KEY_S; 
+ 		
+ 		case 0xf0: 
+ 		case 0xd0:
+-			return KEY_D; //"eth" 
++			//return KEY_D; //"eth" 
+ 			
+ 		case 0xf8: 
+ 		case 0xd8:
+-			return KEY_L; //"oslash"
++			//return KEY_L; //"oslash"
+ 			
+ 		//third row
+ 		case 0xe6: 
+ 		case 0xc6:
+-			return KEY_Z; //"ae"
++			//return KEY_Z; //"ae"
+ 			
+ 		case 0xa2: // "cent": 
+ 		case 0xa9: // "copyright"
+-			return KEY_C;
++			//return KEY_C;
+ 			
+ 		case 0xae: // "registered"
+-			return KEY_V;
++			//return KEY_V;
+ 		
+ 		case 0xf1: 
+ 		case 0xd1:
+-			return KEY_N; //"ntilde"
++			//return KEY_N; //"ntilde"
+ 			
+ 		case 0xb5: 
+-			return KEY_M; //"mu"
++			//return KEY_M; //"mu"
+ 			
+-		//misc
++		//misc -> can be removed
+ 		case 0xb0:
+-			return KEY_F14; //"degree"
++			//return KEY_F14; //"degree"
+ 			
+ 		case 0xb2: 
+-			return KEY_F15; //"twosuperior"
++			//return KEY_F15; //"twosuperior"
+ 			
+ 		case 0xb3: 
+-			return KEY_F16; //"threesuperior"
++			//return KEY_F16; //"threesuperior"
+ 			
+ 		case 0xfe52: 
+-			return KEY_F17; //"dead_circumflex"
++			//return KEY_F17; //"dead_circumflex"
+ 			
+ 		case 0xfe51: 
+-			return KEY_F18; //"dead_acute"
++			//return KEY_F18; //"dead_acute"
+ 			
+ 		case 0xfe50: 
+-			return KEY_F19; //"dead_grave"
++			//return KEY_F19; //"dead_grave"
++			
++		//case 0x0142: // LATIN SMALL LETTER L WITH STROKE
++		case 0x20AC: // EURO SIGN
++		case 0x00B6: // PILCROW SIGN
++		//case 0x0167: //	LATIN SMALL LETTER T WITH STROKE
++		//case 0x2190: // LEFTWARDS ARROW
++		//case 0x2193: //	DOWNWARDS ARROW
++		//case 0x2192: //	RIGHTWARDS ARROW
++		//case 0x00F8: // LATIN SMALL LETTER O WITH STROKE
++		//case 0x00FE: // LATIN SMALL LETTER THORN
++		//case 0x00A8: //	DIAERESIS -- deadkey?
++		//case 0x007E: //	TILDE
++		//case 0x00E6: // LATIN SMALL LETTER AE
++		//case 0x017F: //	LATIN SMALL LETTER LONG S
++		//case 0x00F0: // LATIN SMALL LETTER ETH
++		//case 0x0111: //	LATIN SMALL LETTER D WITH STROKE
++		//case 0x014B: // LATIN SMALL LETTER ENG
++		//case 0x0127: // LATIN SMALL LETTER H WITH STROKE
++		case 0x02DD: //	DOUBLE ACUTE ACCENT
++		case 0x005E: //	CIRCUMFLEX ACCENT
++		case 0x2019: // RIGHT SINGLE QUOTATION MARK 	
++		case 0x00BB: //	RIGHT-POINTING DOUBLE ANGLE QUOTATION MARK
++		case 0x00AB: //	LEFT-POINTING DOUBLE ANGLE QUOTATION MARK
++		//case 0x00A2: //	CENT SIGN
++		case 0x201E: //	DOUBLE LOW-9 QUOTATION MARK 	
++		case 0x201C: //	LEFT DOUBLE QUOTATION MARK
++		case 0x201D: //	RIGHT DOUBLE QUOTATION MARK
++		//case 0x00B5: //	MICRO SIGN
++		case 0x00B7: //	MIDDLE DOT
++		case 0x2026: //	HORIZONTAL ELLIPSIS
++	 	case 0x2013: //	EN DASH
++	 	case 0x00B9: //	SUPERSCRIPT ONE
++		//case 0x00B2: //	SUPERSCRIPT TWO
++		//case 0x00B3: //	SUPERSCRIPT THREE
++		case 0x00BC: // VULGAR FRACTION ONE QUARTER
++		case 0x00BD: //	VULGAR FRACTION ONE HALF
++
++
++			send_umlaut(code);
++			return KEY_F24;
+ 			
+ 	}
+ 	return -1;
+@@ -1389,7 +1444,7 @@ void uinput_key_command(int down, int keysym, rfbClientPtr client) {
+ 			
+ 			usleep(10000);
+ 			
+-			//key_pressed[u] = 0;
++			key_pressed[u] = 0;
+ 			memset(&ev, 0, sizeof(ev));
+ 			gettimeofday(&ev.time, NULL);
+ 			ev.type = EV_KEY;
+@@ -1406,8 +1461,10 @@ void uinput_key_command(int down, int keysym, rfbClientPtr client) {
+ 		
+ 		return;
+ 	}
+-
++	
+ 	scancode = lookup_code(keysym);
++
++	
+ 	
+ 	if(scancode==KEY_LEFTSHIFT || scancode==KEY_RIGHTSHIFT)
+ 	{
+@@ -1417,7 +1474,6 @@ void uinput_key_command(int down, int keysym, rfbClientPtr client) {
+ 	int meta=0;
+ 	#define META(k) if(keysym == k) {printf("%s must be shifted: META\n",#k); meta=1; }
+ 	#define META_INVERT(k) if(keysym == k) {printf("%s must NOT be shifted: META\n",#k); meta=1; }
+-	// un:dead_circumflex[^], degree[°] -- not working
+ 	if(shift_down==0) 
+ 	{
+ 		META(XK_numbersign);

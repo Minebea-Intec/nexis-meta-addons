@@ -1,0 +1,41 @@
+diff --git a/x11vnc/pointer.c b/x11vnc/pointer.c
+index c6657c2..ba7dbd5 100644
+--- a/x11vnc/pointer.c
++++ b/x11vnc/pointer.c
+@@ -655,6 +655,21 @@ static void pipe_pointer(int mask, int x, int y, rfbClientPtr client) {
+ }
+ 
+ static int active_zone=0;
++
++int is_blue_or_cursor(int key)
++{
++    switch(key)
++    {
++	case 65293: // blue
++	case 65364: // down
++	case 65362: // up
++	case 65361: // left
++	case 65363: // right
++	    return 1;
++	default:
++	    return 0;
++    }
++}
+ /*
+  * Actual callback from libvncserver when it gets a pointer event.
+  * This may queue pointer events rather than sending them immediately
+@@ -705,12 +720,14 @@ void pointer_event(int mask, int x, int y, rfbClientPtr client) {
+ 				if(found)
+ 				{
+ 					//printf("softkey down %i\n",found);
++					if(is_blue_or_cursor(found)) keyboard(1,XK_Alt_L,client);
+ 					keyboard(1,found,client);
+ 				}
+ 				else
+ 				{
+ 					//printf("softkey up %i\n",active_zone);
+ 					keyboard(0,active_zone,client);
++					if(is_blue_or_cursor(active_zone)) keyboard(0,XK_Alt_L,client);
+ 				}
+ 			}
+ 			active_zone = found;

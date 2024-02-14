@@ -1,0 +1,24 @@
+From 8985dfab1d1f980f6b82db6d6fc94c88794f5e3b Mon Sep 17 00:00:00 2001
+From: Tobuas Platen <tobias.platen@minebea-intec.com>
+Date: Mon, 2 May 2022 13:38:05 +0200
+Subject: [PATCH] [NEXIS-8633] resolve "Key '<' results in ','" part II
+
+---
+ x11vnc/uinput.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/x11vnc/uinput.c b/x11vnc/uinput.c
+index e493ae6..3e02223 100644
+--- a/x11vnc/uinput.c
++++ b/x11vnc/uinput.c
+@@ -1427,6 +1427,7 @@ void uinput_key_command(int down, int keysym, rfbClientPtr client) {
+ 		META(XK_at);
+ 		META(XK_asciitilde);
+ 		META(XK_bar);
++		META(XK_less);
+ 	}
+ 	else
+ 	{
+--
+libgit2 0.26.0
+

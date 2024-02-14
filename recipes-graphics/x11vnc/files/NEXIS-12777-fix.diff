@@ -1,0 +1,288 @@
+diff --git a/libvncserver/main.c b/libvncserver/main.c
+index 97edd0f..b5ac0fb 100644
+--- a/libvncserver/main.c
++++ b/libvncserver/main.c
+@@ -1069,8 +1069,12 @@ void gettimeofday(struct timeval* tv,char* dummy)
+ }
+ #endif
+ 
++static rfbBool old_stlc = 0;
++extern rfbBool is_stlc;
++rfbBool stlc();
++
+ rfbBool
+-rfbProcessEvents(rfbScreenInfoPtr screen,long usec)
++rfbProcessEvents(rfbScreenInfoPtr screen,long usec) //LZ_0002: called in loop
+ {
+   rfbClientIteratorPtr i;
+   rfbClientPtr cl,clPrev;
+@@ -1078,6 +1082,11 @@ rfbProcessEvents(rfbScreenInfoPtr screen,long usec)
+   rfbBool result=FALSE;
+   extern rfbClientIteratorPtr
+     rfbGetClientIteratorWithClosed(rfbScreenInfoPtr rfbScreen);
++    
++  is_stlc = stlc();
++  if(old_stlc != is_stlc)
++      rfbMarkRectAsModified(screen,0,0,screen->width,screen->height);
++  old_stlc = is_stlc;
+ 
+   if(usec<0)
+     usec=screen->deferUpdateTime*1000;
+diff --git a/libvncserver/rfbserver.c b/libvncserver/rfbserver.c
+index a8a0069..568f599 100644
+--- a/libvncserver/rfbserver.c
++++ b/libvncserver/rfbserver.c
+@@ -24,6 +24,8 @@
+  *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307,
+  *  USA.
+  */
++ 
++//#define DEBUG_OVERLAY
+ 
+ #ifdef __STRICT_ANSI__
+ #define _BSD_SOURCE
+@@ -32,7 +34,10 @@
+ #include <rfb/rfb.h>
+ #include <rfb/rfbregion.h>
+ #include "private.h"
++
++//FIXME: do not hardcode
+ #include "overlay.h"
++//do not use bmp here -- png has 4 channels
+ 
+ #ifdef LIBVNCSERVER_HAVE_FCNTL_H
+ #include <fcntl.h>
+@@ -2463,80 +2468,14 @@ rfbProcessClientNormalMessage(rfbClientPtr cl)
+     }
+ }
+ 
+-static void* shm_get_ptr()
+-{
+-	key_t key = 0xfcecb34; // == key_from_ident("x11vnc_unicode_input",4,0);
+-	int shmid=shmget(key,4,IPC_CREAT|SHM_NORESERVE|0777);
+-	if(shmid<0) return 0xFFFFFFFF;
+-	return shmat(shmid,0,0);
+-}
+-
+-static void* shm_ptr = 0;
+-
+-/* screen overlay (red M) REDUNDANT */
+-extern int screen_overlay_x_offset;
+-extern int screen_overlay_y_offset;
+-
+-//FIXME: this can be optimized for performance
+-void screen_overlay(rfbScreenInfoPtr screen)
+-{
+-		#if 1
+-		if(shm_ptr==0) shm_ptr=shm_get_ptr();
+-		
+-		if(shm_ptr==0xFFFFFFFF) return;
+-		
+-		int* shm_int_ptr = shm_ptr;
+-		
+-		//shm_int_ptr[0] is used for unicode input hack
+-		//shm_int_ptr[1] only one bit is needed to control overlay
+-		//rest of page is reserved
+-		
+-		if(shm_int_ptr[1]==0) 
+-		{
+-			return;
+-		}
+-		#endif
+-		
+-		char* fb = screen->frameBuffer;
+-		int width = screen->width;
+-		int height = screen->height;
+-		
+-		int x_start = screen_overlay_x_offset;
+-		int y_start = screen_overlay_y_offset;
+-		
+-		for(int x=0;x<width;x++)
+-		{
+-			for(int y=0;y<height;y++)
+-			{
+-				if(x>x_start && x<x_start+overlay_png_width && y>y_start && y<y_start+overlay_png_height)
+-				{
+-					int index = x + y*width; 
+-					int index2 = x-x_start + (y-y_start)*overlay_png_width;
+-					if(overlay_png[index2*4+3]>128)
+-					{
+-						fb[index*4+0] = overlay_png[index2*4+2];
+-						fb[index*4+1] = overlay_png[index2*4+1];
+-						fb[index*4+2] = overlay_png[index2*4+0];
+-					}
+-					
+-					
+-				}
+-			}
+-		}
+-		 
+-		
+-		//int depth;
+-}
+-
+-
+ /*
+  * rfbSendFramebufferUpdate - send the currently pending framebuffer update to
+  * the RFB client.
+  * givenUpdateRegion is not changed.
+  */
+ 
+-rfbBool
+-rfbSendFramebufferUpdate(rfbClientPtr cl,
++static rfbBool
++_rfbSendFramebufferUpdate(rfbClientPtr cl,
+                          sraRegionPtr givenUpdateRegion)
+ {
+     sraRectangleIterator* i=NULL;
+@@ -2553,7 +2492,7 @@ rfbSendFramebufferUpdate(rfbClientPtr cl,
+     rfbBool sendServerIdentity = FALSE;
+     rfbBool result = TRUE;
+     
+-    screen_overlay(cl->screen);
++    //screen_overlay(cl->screen);
+     
+ 
+     if(cl->screen->displayHook)
+@@ -3398,4 +3337,141 @@ rfbProcessUDPInput(rfbScreenInfoPtr rfbScreen)
+     }
+ }
+ 
++// ======================================================
++
++int overlay_visible = 0;
++
++static char* fb_backup = 0;
++
++//TODO: move shm code to here
++
++static void* shm_get_ptr()
++{
++	key_t key = 0xfcecb34; // == key_from_ident("x11vnc_unicode_input",4,0);
++	int shmid=shmget(key,4,IPC_CREAT|SHM_NORESERVE|0777);
++	if(shmid<0) return 0xFFFFFFFF;
++	return shmat(shmid,0,0);
++}
++
++static void* shm_ptr = 0;
++
++/* screen overlay (red M) REDUNDANT */
++extern int screen_overlay_x_offset;
++extern int screen_overlay_y_offset;
++
++void screen_overlay_show(rfbScreenInfoPtr screen) //--set a breakpoint here
++{
++    //hack for testing
++    screen_overlay_x_offset = 435;
++    screen_overlay_y_offset = 10;
++
++    char* fb = screen->frameBuffer;
++    int width = screen->width;
++    int height = screen->height;
+ 
++    int x_start = screen_overlay_x_offset;
++    int y_start = screen_overlay_y_offset;
++
++#ifdef DEBUG_OVERLAY
++    FILE* debugfile = fopen("/tmp/screen_overlay.txt","a");
++    clock_t begin = clock();
++#endif
++
++    if(fb_backup==0) fb_backup = malloc(overlay_png_height*3*overlay_png_width);
++    for(int x=0; x<width; x++)
++    {
++        for(int y=0; y<height; y++)
++        {
++            if(x>x_start && x<x_start+overlay_png_width && y>y_start && y<y_start+overlay_png_height)
++            {
++                int index = x + y*width;
++                int index2 = x-x_start + (y-y_start)*overlay_png_width;
++                if(overlay_png[index2*4+3]>128)
++                {
++                    fb_backup[index2*3+0] = fb[index*4+0];
++                    fb_backup[index2*3+1] = fb[index*4+1];
++                    fb_backup[index2*3+2] = fb[index*4+2];
++                    fb[index*4+0] = overlay_png[index2*4+2];
++                    fb[index*4+1] = overlay_png[index2*4+1];
++                    fb[index*4+2] = overlay_png[index2*4+0];
++                }
++            }
++        }
++    }
++
++    overlay_visible = 1;
++
++#ifdef DEBUG_OVERLAY
++    clock_t end = clock();
++    double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
++    fprintf(debugfile,"time_spent=%f\n",time_spent);
++    fclose(debugfile);
++#endif
++
++}
++
++void screen_overlay_hide(rfbScreenInfoPtr screen)
++{
++    if(overlay_visible==0) return;
++    if(fb_backup==0) return;
++    char* fb = screen->frameBuffer;
++    int width = screen->width;
++    int height = screen->height;
++
++    int x_start = screen_overlay_x_offset;
++    int y_start = screen_overlay_y_offset;
++
++    for(int x=0; x<width; x++)
++    {
++        for(int y=0; y<height; y++)
++        {
++            if(x>x_start && x<x_start+overlay_png_width && y>y_start && y<y_start+overlay_png_height)
++            {
++                int index = x + y*width;
++                int index2 = x-x_start + (y-y_start)*overlay_png_width;
++
++
++                if(overlay_png[index2*4+3]>128)
++                {
++                    fb[index*4+0] = fb_backup[index2*3+0];
++                    fb[index*4+1] = fb_backup[index2*3+1];
++                    fb[index*4+2] = fb_backup[index2*3+2];
++                }
++            }
++        }
++    }
++    overlay_visible = 0;
++}
++
++extern char* backdrop_image;
++
++rfbBool is_stlc=0;
++
++rfbBool
++rfbSendFramebufferUpdate(rfbClientPtr cl,
++                         sraRegionPtr givenUpdateRegion)
++{
++    if(is_stlc) screen_overlay_show(cl->screen);
++    rfbBool ret = _rfbSendFramebufferUpdate(cl,givenUpdateRegion);
++    if(backdrop_image==0 || is_stlc==0) screen_overlay_hide(cl->screen);
++    return ret;
++}
++
++rfbBool stlc()
++{
++#ifndef DEBUG_OVERLAY
++    if(shm_ptr==0) shm_ptr=shm_get_ptr();
++
++    if(shm_ptr==0xFFFFFFFF) return;
++
++    int* shm_int_ptr = shm_ptr;
++
++    //shm_int_ptr[0] is used for unicode input hack
++    //shm_int_ptr[1] only one bit is needed to control overlay
++    //rest of page is reserved
++
++    return shm_int_ptr[1]!=0;
++#else
++    return access("/tmp/x11vnc_show_overlay", F_OK)==0;
++#endif
++}

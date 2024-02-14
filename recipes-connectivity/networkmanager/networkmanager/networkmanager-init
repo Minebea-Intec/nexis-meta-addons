@@ -1,0 +1,28 @@
+#!/bin/sh
+
+DAEMON="/usr/sbin/NetworkManager"
+PIDFILE="/var/run/NetworkManager/NetworkManager.pid"
+DESC="NetworkManager"
+
+case "${1}" in
+	start)
+		mkdir -p /var/run/NetworkManager
+		echo -n "Starting ${DESC}: "
+		${DAEMON} && (sleep 40 && mmcli --scan-modems 1>/dev/null 2>&1) &
+		echo "done"
+		;;
+	stop)
+		echo -n "Stopping ${DESC}: "
+		start-stop-daemon -K -o -q -p ${PIDFILE}
+		echo "done"
+		;;
+	restart)
+		${0} stop
+		sleep 1
+		${0} start
+		;;
+	*)
+		echo "Usage: ${0} {start|stop|restart}"
+		exit 1
+		;;
+esac

@@ -1,0 +1,304 @@
+diff --git a/x11vnc/uinput.c b/x11vnc/uinput.c
+index c91f27c..75e7811 100644
+--- a/x11vnc/uinput.c
++++ b/x11vnc/uinput.c
+@@ -1219,121 +1219,72 @@ void uinput_pointer_command(int mask, int x, int y, rfbClientPtr client) {
+ 	bmask = mask;
+ }
+ 
+-
+-static void send_umlaut(int code)
++static void* shm_get_ptr()
+ {
+-	printf("UNICODE\n");
+ 	key_t key = 0xfcecb34; // == key_from_ident("x11vnc_unicode_input",4,0);
+ 	int shmid=shmget(key,4,IPC_CREAT|SHM_NORESERVE|0777);
+-	if(shmid<0) return;
+-	int *ptr=(int*)shmat(shmid,0,0);
+-	if(ptr==0) return;
+-	printf("UNICODE assign\n");
+-	*ptr=code;
++	if(shmid<0) return 0xFFFFFFFF;
++	return shmat(shmid,0,0);
++}
++
++static void* shm_ptr = 0;
++
++static void send_umlaut(int code)
++{
++	if(shm_ptr==0) shm_ptr=shm_get_ptr();
++	if(shm_ptr==0xFFFFFFFF) return;
++
++	int* shm_int_ptr = shm_ptr;
++	shm_int_ptr[0] = code;
++	shm_int_ptr[2]++; //number of keys sent: for debug purposes only
+ }
+ 
+ static int umlaut(int code)
+ {
+-	printf("UMLAUT %x\n",code);
+-	//write byte to fifo
+ 	switch(code)
+ 	{
+-		//first row
+ 		case 0xe4:
+-		case 0xc4:
+-			//return KEY_Q; //"adiaeresis"
+-		
++		case 0xc4:	
+ 		case 0xe5: 
+ 		case 0xc5:
+-			//return KEY_W; //"aring"
+-		
+ 		case 0xe9: 
+ 		case 0xc9: 
+-			//return KEY_E; //"eacute"
+-			
+ 		case 0xeb:
+ 		case 0xcb: 
+-			//return KEY_R; //"ediaeresis"
+-		
+ 		case 0xfe: 
+ 		case 0xde:
+-			//return KEY_T; //"thorn"
+-			
+ 		case 0xfc:
+ 		case 0xdc:
+-			//return KEY_Y; //udiaeresis"
+-			
+ 		case 0xfa:
+ 		case 0xda: 
+-			//return KEY_U; //"uacute"
+-		
+ 		case 0xed: 
+ 		case 0xcd:
+-			//return KEY_I; //"iacute"
+-			
+ 		case 0xf3: 
+ 		case 0xd3:
+-			//return KEY_O; //"oacute"
+-			
+ 		case 0xf6: 
+ 		case 0xd6:
+-			//return KEY_P; //"odiaeresis" -- broken 
+-		
+-		//second row
+ 		case 0xe1:
+ 		case 0xc1:
+-			//return KEY_A; //"aacute"
+-			
+-		case 0xdf: //"ssharp"
+-		case 0xa7: //"section"
+-			//return KEY_S; 
+-		
++		case 0xdf:
++		case 0xa7:
+ 		case 0xf0: 
+ 		case 0xd0:
+-			//return KEY_D; //"eth" 
+-			
+ 		case 0xf8: 
+ 		case 0xd8:
+-			//return KEY_L; //"oslash"
+-			
+-		//third row
+ 		case 0xe6: 
+ 		case 0xc6:
+-			//return KEY_Z; //"ae"
+-			
+-		case 0xa2: // "cent": 
+-		case 0xa9: // "copyright"
+-			//return KEY_C;
+-			
+-		case 0xae: // "registered"
+-			//return KEY_V;
+-		
++		case 0xa2:
++		case 0xa9:
++		case 0xae:
+ 		case 0xf1: 
+ 		case 0xd1:
+-			//return KEY_N; //"ntilde"
+-			
+ 		case 0xb5: 
+-			//return KEY_M; //"mu"
+-			
+-		//misc -> can be removed
+ 		case 0xb0:
+-			//return KEY_F14; //"degree"
+-			
+ 		case 0xb2: 
+-			//return KEY_F15; //"twosuperior"
+-			
+ 		case 0xb3: 
+-			//return KEY_F16; //"threesuperior"
+-			
+ 		case 0xfe52: 
+-			//return KEY_F17; //"dead_circumflex"
+-			
+ 		case 0xfe51: 
+-			//return KEY_F18; //"dead_acute"
+-			
+ 		case 0xfe50: 
+-			//return KEY_F19; //"dead_grave"
+-			
+ 		//case 0x0142: // LATIN SMALL LETTER L WITH STROKE
+ 		case 0x20AC: // EURO SIGN
+ 		case 0x00B6: // PILCROW SIGN
+@@ -1369,19 +1320,11 @@ static int umlaut(int code)
+ 		//case 0x00B3: //	SUPERSCRIPT THREE
+ 		case 0x00BC: // VULGAR FRACTION ONE QUARTER
+ 		case 0x00BD: //	VULGAR FRACTION ONE HALF
+-
+-
+-			send_umlaut(code);
+-			return KEY_F24;
+-			
++		return KEY_F24;	
+ 	}
+ 	return -1;
+ }
+ 
+-static int shift_down=0;
+-
+-#define SEND_SHIFT(down,scancode) {memset(&ev, 0, sizeof(ev)); gettimeofday(&ev.time, NULL); ev.type = EV_KEY; ev.code = (unsigned char) scancode; ev.value = down;  write(d, &ev, sizeof(ev));}
+-
+ void uinput_key_command(int down, int keysym, rfbClientPtr client) {
+ #ifdef UINPUT_OK
+ 	struct input_event ev;
+@@ -1400,114 +1343,18 @@ void uinput_key_command(int down, int keysym, rfbClientPtr client) {
+ 		return;
+ 	}
+ 	
+-	int u = umlaut(keysym);
++	send_umlaut(keysym);
+ 	
+-	if(u>0)
+-	{
+-		
+-		if(down)
+-		{
+-			key_pressed[KEY_RIGHTMETA] = 1;
+-			memset(&ev, 0, sizeof(ev));
+-			gettimeofday(&ev.time, NULL);
+-			ev.type = EV_KEY;
+-			ev.code = (unsigned char) KEY_RIGHTMETA;
+-			ev.value = 1;
+-			write(d, &ev, sizeof(ev));
+-			
+-			usleep(10000);
+-			
+-			key_pressed[u] = 1;
+-			memset(&ev, 0, sizeof(ev));
+-			gettimeofday(&ev.time, NULL);
+-			ev.type = EV_KEY;
+-			ev.code = (unsigned char) u;
+-			ev.value = 1;
+-			write(d, &ev, sizeof(ev));
+-			
+-			ev.type = EV_SYN;
+-			ev.code = SYN_REPORT;
+-			ev.value = 0;
+-			write(d, &ev, sizeof(ev));
+-		}
+-		else
+-		{
+-			
+-			key_pressed[KEY_RIGHTMETA] = 0;
+-			memset(&ev, 0, sizeof(ev));
+-			gettimeofday(&ev.time, NULL);
+-			ev.type = EV_KEY;
+-			ev.code = (unsigned char) u;
+-			ev.value = 0;
+-			write(d, &ev, sizeof(ev));
+-			
+-			
+-			usleep(10000);
+-			
+-			key_pressed[u] = 0;
+-			memset(&ev, 0, sizeof(ev));
+-			gettimeofday(&ev.time, NULL);
+-			ev.type = EV_KEY;
+-			ev.code = (unsigned char) KEY_RIGHTMETA;
+-			ev.value = 0;
+-			write(d, &ev, sizeof(ev));
+-			
+-			ev.type = EV_SYN;
+-			ev.code = SYN_REPORT;
+-			ev.value = 0;
+-			write(d, &ev, sizeof(ev));
+-			
+-		}
+-		
+-		return;
+-	}
++	int scancode_hack = umlaut(keysym);
+ 	
+ 	scancode = lookup_code(keysym);
+-
+-	
+-	
+-	if(scancode==KEY_LEFTSHIFT || scancode==KEY_RIGHTSHIFT)
+-	{
+-		shift_down = down;
+-	}
+ 	
+-	int meta=0;
+-	#define META(k) if(keysym == k) {printf("%s must be shifted: META\n",#k); meta=1; }
+-	#define META_INVERT(k) if(keysym == k) {printf("%s must NOT be shifted: META\n",#k); meta=1; }
+-	if(shift_down==0) 
+-	{
+-		META(XK_numbersign);
+-		META(XK_plus);
+-		META(XK_braceleft);
+-		META(XK_braceright);
+-		META(XK_at);
+-		META(XK_asciitilde);
+-		META(XK_bar);
+-		META(XK_less);
+-	}
+-	else
+-	{
+-		META_INVERT(XK_slash);
+-		META_INVERT(XK_equal);
+-		META_INVERT(XK_semicolon);
+-		META_INVERT(XK_apostrophe);
+-	}
++	if(scancode_hack>=0) scancode = scancode_hack;
+ 
+ 	if (scancode < 0) {
+ 		return;
+ 	}
+ 	if (db) fprintf(stderr, "uinput_key_command: %d -> %d %s fd=%d\n", keysym, scancode, down ? "down" : "up", d);
+-	
+-	if(meta)
+-	{
+-		key_pressed[KEY_RIGHTMETA] = 0;
+-		memset(&ev, 0, sizeof(ev));
+-		gettimeofday(&ev.time, NULL);
+-		ev.type = EV_KEY;
+-		ev.code = (unsigned char) KEY_RIGHTMETA;
+-		ev.value = 1;
+-		write(d, &ev, sizeof(ev));
+-	}
+ 
+ 	memset(&ev, 0, sizeof(ev));
+ 	gettimeofday(&ev.time, NULL);
+@@ -1516,17 +1363,6 @@ void uinput_key_command(int down, int keysym, rfbClientPtr client) {
+ 	ev.value = down;
+ 
+ 	write(d, &ev, sizeof(ev));
+-	
+-	if(meta)
+-	{
+-		key_pressed[KEY_RIGHTMETA] = 0;
+-		memset(&ev, 0, sizeof(ev));
+-		gettimeofday(&ev.time, NULL);
+-		ev.type = EV_KEY;
+-		ev.code = (unsigned char) KEY_RIGHTMETA;
+-		ev.value = 0;
+-		write(d, &ev, sizeof(ev));
+-	}
+ 
+ 	ev.type = EV_SYN;
+ 	ev.code = SYN_REPORT;

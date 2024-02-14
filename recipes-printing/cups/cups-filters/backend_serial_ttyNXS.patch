@@ -1,0 +1,21 @@
+diff -Nru cups-filters-1.25.11.orig/backend/serial.c cups-filters-1.25.11/backend/serial.c
+--- cups-filters-1.25.11.orig/backend/serial.c	2019-10-10 12:46:53.000000000 +0200
++++ cups-filters-1.25.11/backend/serial.c	2021-08-24 15:07:21.665657549 +0200
+@@ -875,6 +875,17 @@
+     }
+   }
+ 
++  for (i = 1; i < 5; i ++)
++    for (j = 0; j < 2; j ++)
++      {
++	snprintf(info, sizeof(info), "NEXIS Slot %d port %d", i, j);
++	sprintf(device, "/dev/nexis/ttyNXS-s%dp%d", i, j);
++	if (access(device, F_OK) >= 0)
++	  {
++	    printf("serial serial:%s?baud=115200 \"Unknown\" \"%s\"\n", device, info);
++	  }
++      }
++  
+   for (i = 0; i < 64; i ++)
+   {
+     for (j = 0; j < 8; j ++)
