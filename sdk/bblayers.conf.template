@@ -1,0 +1,24 @@
+# POKY_BBLAYERS_CONF_VERSION is increased each time build/conf/bblayers.conf
+# changes incompatibly
+POKY_BBLAYERS_CONF_VERSION = "2"
+
+BBPATH = "${TOPDIR}"
+BBFILES ?= ""
+
+BBLAYERS ?= " \
+  {{REPODIR}}/sources/poky/meta \
+  {{REPODIR}}/sources/poky/meta-poky \
+  {{REPODIR}}/sources/poky/meta-yocto-bsp \
+  {{REPODIR}}/sources/meta-openembedded/meta-oe \
+  {{REPODIR}}/sources/meta-openembedded/meta-python \
+  {{REPODIR}}/sources/meta-openembedded/meta-networking \
+  {{REPODIR}}/sources/meta-openembedded/meta-webserver \
+  {{REPODIR}}/sources/meta-swupdate \
+  {{REPODIR}}/sources/meta-freescale \
+  {{REPODIR}}/sources/meta-fsl-demos \
+  {{REPODIR}}/sources/meta-digi/meta-digi-arm \
+  {{REPODIR}}/sources/meta-digi/meta-digi-dey \
+  {{REPODIR}}/sources/meta-addons-nexis \
+  "
+LAYERDEPENDS_digi-dey_remove = " qt5-layer "
+TOOLCHAIN_HOST_TASK_append = " nativesdk-luajit "
